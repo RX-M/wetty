@@ -83,7 +83,7 @@ cat > /etc/systemd/system/wetty.service <<EOF
 # systemd unit file /etc/systemd/system/wetty.service
 [Unit]
 Description=Wetty Web Terminal
-After=network.target
+After=ssh.service
 [Service]
 Type=simple
 WorkingDirectory=/var/lib/wetty
