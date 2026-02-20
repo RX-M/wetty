@@ -1,15 +1,15 @@
 #!/bin/env sh
 #
-# Usage: ./setup.sh [desired-ubuntu-password]
+# Usage: sudo ./setup.sh [desired-ubuntu-password]
+#
+# This script installs wetty as a daemon listening on port 443 with a self
+# signed cert on a new (untampered with) standard RX-M Ubuntu lab system. To
+# connect to the system browse to: https://<ip-of-lab-vm>/wetty
 #
 # Then login with:
 #     user: ubuntu
 #     password: rx-myyyymmdd (e.g. rx-m20260127) --or--
 #               <password provided on cli>
-#
-# This script installs wetty as a daemon listening on port 443 with a self
-# signed cert on a new (untampered with) standard RX-M Ubuntu lab system. To
-# connect to the system browse to: https://<ip-of-lab-vm>/wetty
 #
 # This is a fast websocket based terminal solution for those who cannot use
 # ssh. Note that installing wetty does not disable standard ssh/key based
@@ -34,62 +34,70 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 PASS="${1:-rx-m$(date +%Y%m%d)}"
-WETTY_PORT="3000"
-WETTY_HOST="127.0.0.1"
-WETTY_BASE="/wetty"
 
-echo "[1/9] Updating apt + installing prerequisites..."
+WETTY_PORT="80"
+WETTY_HOST="0.0.0.0"
+WETTY_BASE="/wetty"
+PUB_IP=$(curl -s https://icanhazip.com)
+
+echo "[1/6] Updating apt + installing prerequisites..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y --no-install-recommends \
-  ca-certificates curl openssl \
-  openssh-server openssh-client \
-  nginx
+apt-get install -y --no-install-recommends ca-certificates curl openssl build-essential make
 
-echo "[2/9] Ensuring ubuntu user exists + setting password..."
+
+echo "[2/6] Ensuring ubuntu user exists + setting password..."
 if ! id ubuntu >/dev/null 2>&1; then
-  adduser --disabled-password --gecos "" ubuntu
+  adduser --disabled-password --comment "" ubuntu
 fi
 echo "ubuntu:${PASS}" | chpasswd
 
-echo "[3/9] Ensuring SSH password auth is enabled (for wetty -> ssh localhost)..."
+
+echo "[3/6] Enabling SSH password auth..."
+sed -i '/PasswordAuthentication/d' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+sed -i '/PasswordAuthentication/d' /etc/ssh/sshd_config
+echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
 SSHD_D_DIR="/etc/ssh/sshd_config.d"
 mkdir -p "$SSHD_D_DIR"
 cat > "${SSHD_D_DIR}/99-wetty.conf" <<'EOF'
-# Managed by setup.sh (wetty)
+# Managed by rx-m-wetty-setup.sh
 PasswordAuthentication yes
 KbdInteractiveAuthentication yes
 UsePAM yes
 EOF
-systemctl restart ssh || systemctl restart sshd || true
+systemctl restart ssh
 
-echo "[4/9] Installing Node.js + npm (Ubuntu 24.04 repo) + wetty..."
-apt-get install -y --no-install-recommends nodejs npm
+
+echo "[4/6] Installing Node.js + npm with nvm, then installing wetty..."
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+source "$HOME/.nvm/nvm.sh"
+nvm install 24
 npm install -g wetty
+# wetty  -p 80 --force-ssh | jq
+WETTY_BIN=`which wetty`
 
-WETTY_BIN="$(command -v wetty || true)"
-if [ -z "${WETTY_BIN}" ]; then
-  echo "ERROR: wetty not found after npm install -g wetty" >&2
-  exit 1
-fi
-
-echo "[5/9] Creating systemd service for wetty (bound to localhost only)..."
+echo "[5/6] Creating systemd service for wetty..."
+mkdir -p /var/lib/wetty
 cat > /etc/systemd/system/wetty.service <<EOF
+# systemd unit file
+#
+# /etc/systemd/system/wetty.service
+# systemctl enable wetty.service
+# systemctl start wetty.service
+
 [Unit]
-Description=WeTTY (web terminal)
-After=network-online.target ssh.service
-Wants=network-online.target
+Description=Wetty Web Terminal
+After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-Group=ubuntu
-WorkingDirectory=/home/ubuntu
-Environment=NODE_ENV=production
-ExecStart=${WETTY_BIN} --host ${WETTY_HOST} --port ${WETTY_PORT} --base ${WETTY_BASE} --force-ssh --ssh-host localhost --ssh-user ubuntu
+WorkingDirectory=/var/lib/wetty
+ExecStart=${WETTY_BIN} -p ${WETTY_PORT} --base ${WETTY_BASE} --force-ssh
+TimeoutStopSec=20
+KillMode=mixed
 Restart=always
 RestartSec=2
-TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -98,82 +106,12 @@ EOF
 systemctl daemon-reload
 systemctl enable --now wetty
 
-echo "[6/9] Generating self-signed TLS cert for nginx..."
-SSL_DIR="/etc/nginx/ssl"
-mkdir -p "$SSL_DIR"
-chmod 700 "$SSL_DIR"
 
-IP_ADDR="$(hostname -I 2>/dev/null | awk '{print $1}')"
-CN="${IP_ADDR:-$(hostname)}"
-
-openssl req -x509 -nodes -newkey rsa:2048 \
-  -keyout "${SSL_DIR}/wetty.key" \
-  -out "${SSL_DIR}/wetty.crt" \
-  -days 825 \
-  -subj "/CN=${CN}"
-
-chmod 600 "${SSL_DIR}/wetty.key" "${SSL_DIR}/wetty.crt"
-
-echo "[7/9] Configuring nginx to serve https://<host>/wetty (WebSocket reverse proxy)..."
-rm -f /etc/nginx/sites-enabled/default || true
-
-cat > /etc/nginx/sites-available/wetty <<EOF
-server {
-  listen 80 default_server;
-  listen [::]:80 default_server;
-  return 301 https://\$host\$request_uri;
-}
-
-server {
-  listen 443 ssl http2 default_server;
-  listen [::]:443 ssl http2 default_server;
-
-  ssl_certificate     ${SSL_DIR}/wetty.crt;
-  ssl_certificate_key ${SSL_DIR}/wetty.key;
-
-  # Optional hardening (kept minimal for lab use)
-  add_header X-Content-Type-Options nosniff always;
-  add_header X-Frame-Options SAMEORIGIN always;
-  add_header Referrer-Policy no-referrer always;
-
-  # WeTTY docs recommend this websocket proxy shape for /wetty
-  location ^~ ${WETTY_BASE} {
-    proxy_pass http://${WETTY_HOST}:${WETTY_PORT}${WETTY_BASE};
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 43200000;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header Host \$http_host;
-    proxy_set_header X-NginX-Proxy true;
-  }
-
-  location = / {
-    return 302 ${WETTY_BASE};
-  }
-}
-EOF
-
-ln -sf /etc/nginx/sites-available/wetty /etc/nginx/sites-enabled/wetty
-nginx -t
-systemctl enable --now nginx
-systemctl reload nginx
-
-echo "[8/9] Opening firewall (if ufw is active)..."
-if command -v ufw >/dev/null 2>&1; then
-  if ufw status 2>/dev/null | grep -qi "Status: active"; then
-    ufw allow 443/tcp || true
-    ufw allow 80/tcp  || true
-  fi
-fi
-
-echo "[9/9] Done."
+echo "[6/6] Done."
 echo "------------------------------------------------------------"
-echo "Wetty URL:      https://${CN}${WETTY_BASE}"
+echo "Wetty URL:      https://${PUB_IP}:${WETTY_PORT}${WETTY_BASE}"
 echo "Login user:     ubuntu"
 echo "Login password: ${PASS}"
-echo "Note: Your browser will warn due to a self-signed certificate."
 echo "Service status: systemctl status wetty --no-pager"
 echo "Logs:           journalctl -u wetty -f"
 echo "------------------------------------------------------------"
