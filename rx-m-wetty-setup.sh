@@ -40,6 +40,7 @@ WETTY_HOST="0.0.0.0"
 WETTY_BASE="/wetty"
 PUB_IP=$(curl -s https://icanhazip.com)
 
+
 echo "[1/6] Updating apt + installing prerequisites..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
@@ -77,19 +78,14 @@ npm install -g wetty
 # wetty  -p 80 --force-ssh | jq
 WETTY_BIN=`which wetty`
 
+
 echo "[5/6] Creating systemd service for wetty..."
 mkdir -p /var/lib/wetty
 cat > /etc/systemd/system/wetty.service <<EOF
-# systemd unit file
-#
-# /etc/systemd/system/wetty.service
-# systemctl enable wetty.service
-# systemctl start wetty.service
-
+# systemd unit file /etc/systemd/system/wetty.service
 [Unit]
 Description=Wetty Web Terminal
 After=network.target
-
 [Service]
 Type=simple
 WorkingDirectory=/var/lib/wetty
@@ -98,11 +94,9 @@ TimeoutStopSec=20
 KillMode=mixed
 Restart=always
 RestartSec=2
-
 [Install]
 WantedBy=multi-user.target
 EOF
-
 systemctl daemon-reload
 systemctl enable --now wetty
 
