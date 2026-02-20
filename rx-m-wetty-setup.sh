@@ -70,12 +70,10 @@ EOF
 systemctl restart ssh
 
 
-echo "[4/6] Installing Node.js + npm with nvm, then installing wetty..."
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-source "$HOME/.nvm/nvm.sh"
-nvm install 24
+echo "[4/6] Installing Node.js + npm, then installing wetty..."
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
 npm install -g wetty
-# wetty  -p 80 --force-ssh | jq
 WETTY_BIN=`which wetty`
 
 
@@ -106,7 +104,7 @@ echo "------------------------------------------------------------"
 echo "Wetty URL:      https://${PUB_IP}:${WETTY_PORT}${WETTY_BASE}"
 echo "Login user:     ubuntu"
 echo "Login password: ${PASS}"
-echo "Service status: systemctl status wetty --no-pager"
+echo "Service status: systemctl status wetty --no-pager -l"
 echo "Logs:           journalctl -u wetty -f"
 echo "------------------------------------------------------------"
 
