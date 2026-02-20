@@ -55,10 +55,12 @@ echo "ubuntu:${PASS}" | chpasswd
 
 
 echo "[3/6] Enabling SSH password auth..."
-sed -i '/PasswordAuthentication/d' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
-echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+sed -i '/PasswordAuthentication/d' /etc/ssh/ssh_config
+echo 'PasswordAuthentication yes' >> /etc/ssh/ssh_config
 sed -i '/PasswordAuthentication/d' /etc/ssh/sshd_config
 echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+sed -i '/PasswordAuthentication/d' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
 SSHD_D_DIR="/etc/ssh/sshd_config.d"
 mkdir -p "$SSHD_D_DIR"
 cat > "${SSHD_D_DIR}/99-wetty.conf" <<'EOF'
