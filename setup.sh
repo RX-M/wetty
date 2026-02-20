@@ -4,34 +4,6 @@
 #
 # Then login with:
 #     user: ubuntu
-#     password: rx-myyyymmdd (e.g. rx-m20260127) --or-- 
-#               <password provided on cli>
-#
-# This script installs wetty as a daemon listenting on port 443 with a self
-# signed cert on a new (untampered with) standard RX-M Ubuntu lab system. To
-# connect to the system browse to: https://<ip-of-lab-vm>/wetty
-#
-# This is a fast websocket based terminal solution for those who cannot use
-# ssh. Note that installing wetty does not disable standard ssh/key based
-# login support.
-#
-# Caveats:
-# ==============================================
-# 1. While the connection is TLS it uses a self signed certificate, so users 
-#    will have to accept the security warning in the browser.
-# 2. SFTP will not work, this is not ssh. File uploads can be made by copying
-#    files from the browser machine to a cloud location (e.g. github) and then
-#    pulling the file down with wget from the lab box, for example.
-# 3. This solution does not support X11 so you can not forward GUI windows
-#    over this connection. Any GUIs used on the lab system will have to be 
-#    web servers accessed with new browser tabs remotely.
-```sh
-#!/bin/env sh
-#
-# Usage: ./setup.sh [desired-ubuntu-password]
-#
-# Then login with:
-#     user: ubuntu
 #     password: rx-myyyymmdd (e.g. rx-m20260127) --or--
 #               <password provided on cli>
 #
