@@ -44,43 +44,25 @@ PUB_IP=$(curl -s https://icanhazip.com)
 echo "[1/6] Updating apt + installing prerequisites..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y --no-install-recommends ca-certificates curl openssl build-essential make
+apt-get install -y --no-install-recommends ca-certificates openssl build-essential make
 
 
-echo "[2/6] Ensuring ubuntu user exists + setting password..."
-if ! id ubuntu >/dev/null 2>&1; then
-  adduser --disabled-password --comment "" ubuntu
-fi
+echo "[2/6] Setting password for user ubuntu..."
 echo "ubuntu:${PASS}" | chpasswd
 
 
 echo "[3/6] Enabling SSH password auth..."
-sed -i '/PasswordAuthentication/d' /etc/ssh/ssh_config
-echo 'PasswordAuthentication yes' >> /etc/ssh/ssh_config
-sed -i '/PasswordAuthentication/d' /etc/ssh/sshd_config
-echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
-sed -i '/PasswordAuthentication/d' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
-echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
-SSHD_D_DIR="/etc/ssh/sshd_config.d"
-mkdir -p "$SSHD_D_DIR"
-cat > "${SSHD_D_DIR}/99-wetty.conf" <<'EOF'
-# Managed by rx-m-wetty-setup.sh
-PasswordAuthentication yes
-KbdInteractiveAuthentication yes
-UsePAM yes
-EOF
-systemctl restart ssh
+rm /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
 
 
 echo "[4/6] Installing Node.js + npm, then installing wetty..."
-curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+wget -O - https://deb.nodesource.com/setup_24.x | sh
 sudo apt install -y nodejs
 npm install -g wetty
 WETTY_BIN=`which wetty`
 
 
 echo "[5/6] Creating systemd service for wetty..."
-mkdir -p /var/lib/wetty
 cat > /etc/systemd/system/wetty.service <<EOF
 # systemd unit file /etc/systemd/system/wetty.service
 [Unit]
@@ -88,7 +70,7 @@ Description=Wetty Web Terminal
 After=ssh.service
 [Service]
 Type=simple
-WorkingDirectory=/var/lib/wetty
+WorkingDirectory=/root
 ExecStart=${WETTY_BIN} -p ${WETTY_PORT} --base ${WETTY_BASE} --force-ssh
 TimeoutStopSec=20
 KillMode=mixed
