@@ -56,12 +56,18 @@ wget -O - https://get.docker.com | sh
 PASS="${1:-rx-m$(date +%Y%m%d)}"
 echo "ubuntu:${PASS}" | chpasswd
 rm /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+systemctl restart ssh
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout my-untrusted.key \
   -out my-untrusted.cert -subj "/C=US/ST=State/L=City/O=Organization/CN=rx-m.com"
 docker run -d --net=host --restart always -v $(pwd)/my-untrusted.cert:/tmp/wetty.cert:ro \
   -v $(pwd)/my-untrusted.key:/tmp/wetty.key:ro wettyoss/wetty -p 443 --force-ssh \
   --ssl-cert /tmp/wetty.cert --ssl-key /tmp/wetty.key
 ```
+
+To access the system Browser to URL:  `https://<pub-ip>/wetty`
+
+Login with credentials: `ubuntu/rx-myyyymmdd` (password defaults to rx-m and the year, month, 
+day of system launch), setting the password to something less predictable in the script is advised.
 
 More info below:
 
@@ -135,8 +141,6 @@ And kill an override in an sshd daemon directory: /etc/ssh/sshd_config.d/60-clou
 ```
 #PasswordAuthentication no
 ```
-
-> N.B. Restart not required
 
 And restart sshd:
 
