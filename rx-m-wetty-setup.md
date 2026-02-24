@@ -59,7 +59,7 @@ rm /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout my-untrusted.key \
   -out my-untrusted.cert -subj "/C=US/ST=State/L=City/O=Organization/CN=rx-m.com"
 docker run -d --net=host --restart always -v $(pwd)/my-untrusted.cert:/tmp/wetty.cert:ro \
-  -v $(pwd)/my-untrusted.key:/tmp/wetty.key:ro wettyoss/ssh -p 443 --force-ssh \
+  -v $(pwd)/my-untrusted.key:/tmp/wetty.key:ro wettyoss/wetty -p 443 --force-ssh \
   --ssl-cert /tmp/wetty.cert --ssl-key /tmp/wetty.key
 ```
 
@@ -150,7 +150,7 @@ sudo systemctl reload ssh
 The docker container for wetty has some tricky switches:
 
 ```
-docker run -d --net=host --restart always wettyoss/ssh -p 80 --force-ssh
+docker run -d --net=host --restart always wettyoss/wetty -p 80 --force-ssh
 
 ```
 
