@@ -194,7 +194,7 @@ docker run -d \
 
 ### 7 - Test
 
-Navigate to the AWS public IP of the EC2 instance: http://10.20.30.40/ssh
+Navigate to the AWS public IP of the EC2 instance: http(s)://10.20.30.40/wetty
 
 Supply credentials for the user whose password was just set.
 
