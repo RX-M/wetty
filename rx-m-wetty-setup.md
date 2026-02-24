@@ -1,29 +1,70 @@
 ![RX-M LLC](https://rx-m.com/rxm-cnc.svg)
 
+
 # wetty setup for AWS
+
 
 ## What is wetty?
 
-wetty is an open source implementation of web browsing to a Linux TTY terminal (we-tty). It listens on port 80
-or 443 and accepts a Linux user login using username and password. It uses an ssh protocol over HTTP to emulate
-a terminal within a browser window.
+Wetty is an open source implementation of web browsing to a Linux TTY terminal (we-tty). It listens on a
+designated port (3000 is the default) and accepts a Linux user login (username/password) through a browser 
+interface. It uses HTTP or HTTPS to connect and then upgrades to WebSocket for performance. The wetty 
+service then connects to an sshd service on the back side (often via localhost), extending ssh access 
+to the client over the web.
+
 
 ## Why not use SSH directly?
 
-In enterprise environments, access to port 22 (ssh) is blanket denied, often by more than one block (e.g.,
-zscaler, iptables, gateways, etc.) In order to access EC2 instances on AWS, we need a workaround to permit
-students to access our lab machines.
+In enterprise environments, access to port 22 (ssh) may be denied, often by more than one system (e.g.,
+zscaler, iptables, gateways, etc.). Some systems block ssh even when found on other ports. In order to 
+allow students to access EC2 instances on AWS in this type of environment, we need a workaround.
+
 
 ## How does wetty help?
 
-Since it is unlikely that enterprise organizations actually block access to an AWS IP - after all, many or most
-web sites today are hosted on an AWS instance, so even corporate employees need browse (port 80/443) access to
-AWS-hosted sites. A wetty server running on an EC2 instance forwards traffic between the ssh protocol on port 22
-to an HTTP protocol on port 80/443.
+It is rare that enterprises block access to an AWS IPs, even corporate employees need to browse
+(often reaching commercial or public servers on EC2 using HTTP/S on ports 80/443). Wetty thus 
+allows corporate students to gain terminal access to our AWS EC2 Lab VMs over HTTP/S. Another 
+option is Guacamole, but this requires a fairly complex setup. 
 
-Result: workaround for corporate students to gain terminal access to our AWS EC2 VMs.
+
+## How is wetty run in a lab environment?
+
+We simply run wetty on every student system. This involes either executing an installer script or
+installing docker and running the wetty container. This can be done with Ansible, Terraform or
+an EC2 Data Script. Caveats:
+
+- Unlike normal RX-M lab environments which use ssh keys, a password must be set (one password can be used for all of the lab systems)
+- X11 forwarding does not work over wetty (popup auth windows and the like will not work)
+- SFTP does not work over wetty, wetty is not ssh, it is WebSocket based
+
 
 ## Setup on the AWS Linux box (ubuntu)
+
+The easiest way to complete setup is to:
+
+1. Open the EC2 Console and start the "Launch instance" process.
+2. Navigate to the Advanced details section.
+3. Paste an install script into the User data field.
+
+The AWS console will then automatically run the script on each system launched.
+
+Script to run wetty with TLS on port 443:
+
+```
+wget -O - https://get.docker.com | sh
+PASS="${1:-rx-m$(date +%Y%m%d)}"
+echo "ubuntu:${PASS}" | chpasswd
+rm /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout my-untrusted.key \
+  -out my-untrusted.cert -subj "/C=US/ST=State/L=City/O=Organization/CN=rx-m.com"
+docker run -d --net=host --restart always -v $(pwd)/my-untrusted.cert:/tmp/wetty.cert:ro \
+  -v $(pwd)/my-untrusted.key:/tmp/wetty.key:ro wettyoss/ssh -p 443 --force-ssh \
+  --ssl-cert /tmp/wetty.cert --ssl-key /tmp/wetty.key
+```
+
+More info below:
+
 
 ### 1 - Typical repo update
 
@@ -32,6 +73,7 @@ After connecting to an AWS instance, we can bring repos up-to-date:
 ```
 sudo apt update
 ```
+
 
 ### 2 - Install docker
 
@@ -56,6 +98,7 @@ sudo usermod -aG docker $USER
 
 Exit the session, then re-establish to update the user to the docker group - as always.
 
+
 ### 3 - Create a pssword and/or user for login
 
 You can either let users login as "ubuntu" or create a new user name. Regardless, you will need to provide
@@ -73,13 +116,18 @@ For a new user:
 sudo adduser student
 ```
 
+
 ### 5 - Modify sshd to accept password credential
+
+> N.B. This is the default and not needed:
 
 Edit the file /etc/ssh/sshd_config to allow password logins:
 
 ```
 PasswordAuthentication yes
 ```
+
+> N.B. You can also just delete this file.
 
 And kill an override in an sshd daemon directory: /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
 (Comment out the line or change the no to yes)
@@ -88,11 +136,14 @@ And kill an override in an sshd daemon directory: /etc/ssh/sshd_config.d/60-clou
 #PasswordAuthentication no
 ```
 
+> N.B. Restart not required
+
 And restart sshd:
 
 ```
 sudo systemctl reload ssh
 ```
+
 
 ### 6 - Run the wetty container
 
@@ -102,6 +153,7 @@ The docker container for wetty has some tricky switches:
 docker run -d --net=host --restart always wettyoss/ssh -p 80 --force-ssh
 
 ```
+
 
 #### 6.1 - Running wetty over TLS (port 443)
 
@@ -133,10 +185,12 @@ docker run -d \
 
 ```
 
+
 ### 7 - Test
 
 Navigate to the AWS public IP of the EC2 instance: http://10.20.30.40/ssh
 
 Supply credentials for the user whose password was just set.
+
 
 _Copyright (c) 2025-2026 RX-M LLC, Cloud Native Consulting, all rights reserved_
