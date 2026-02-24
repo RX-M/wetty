@@ -66,6 +66,8 @@ docker run -d --net=host --restart always -v $(pwd)/my-untrusted.cert:/tmp/wetty
 
 To access the system Browser to URL:  `https://<pub-ip>/wetty`
 
+> The cert is self signed, so users will need to accept the security warning.
+
 Login with credentials: `ubuntu/rx-myyyymmdd` (password defaults to rx-m and the year, month, 
 day of system launch), setting the password to something less predictable in the script is advised.
 
