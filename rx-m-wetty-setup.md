@@ -1,32 +1,27 @@
 ![RX-M LLC](https://rx-m.com/rxm-cnc.svg)
 
-
 # wetty setup for AWS
-
 
 ## What is wetty?
 
 Wetty is an open source implementation of web browsing to a Linux TTY terminal (we-tty). It listens on a
-designated port (3000 is the default) and accepts a Linux user login (username/password) through a browser 
-interface. It uses HTTP or HTTPS to connect and then upgrades to WebSocket for performance. The wetty 
-service then connects to an sshd service on the back side (often via localhost), extending ssh access 
+designated port (3000 is the default) and accepts a Linux user login (username/password) through a browser
+interface. It uses HTTP or HTTPS to connect and then upgrades to WebSocket for performance. The wetty
+service then connects to an sshd service on the back side (often via localhost), extending ssh access
 to the client over the web.
-
 
 ## Why not use SSH directly?
 
 In enterprise environments, access to port 22 (ssh) may be denied, often by more than one system (e.g.,
-zscaler, iptables, gateways, etc.). Some systems block ssh even when found on other ports. In order to 
+zscaler, iptables, gateways, etc.). Some systems block ssh even when found on other ports. In order to
 allow students to access EC2 instances on AWS in this type of environment, we need a workaround.
-
 
 ## How does wetty help?
 
 It is rare that enterprises block access to an AWS IPs, even corporate employees need to browse
-(often reaching commercial or public servers on EC2 using HTTP/S on ports 80/443). Wetty thus 
-allows corporate students to gain terminal access to our AWS EC2 Lab VMs over HTTP/S. Another 
-option is Guacamole, but this requires a fairly complex setup. 
-
+(often reaching commercial or public servers on EC2 using HTTP/S on ports 80/443). Wetty thus
+allows corporate students to gain terminal access to our AWS EC2 Lab VMs over HTTP/S. Another
+option is Guacamole, but this requires a fairly complex setup.
 
 ## How is wetty run in a lab environment?
 
@@ -37,7 +32,6 @@ an EC2 Data Script. Caveats:
 - Unlike normal RX-M lab environments which use ssh keys, a password must be set (one password can be used for all of the lab systems)
 - X11 forwarding does not work over wetty (popup auth windows and the like will not work)
 - SFTP does not work over wetty, wetty is not ssh, it is WebSocket based
-
 
 ## Setup on the AWS Linux box (ubuntu)
 
@@ -55,6 +49,7 @@ Script to run wetty with TLS on port 443:
 wget -O - https://get.docker.com | sh
 PASS="${1:-rx-m$(date +%Y%m%d)}"
 echo "ubuntu:${PASS}" | chpasswd
+sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
 rm /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
 systemctl restart ssh
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout my-untrusted.key \
@@ -64,15 +59,27 @@ docker run -d --net=host --restart always -v $(pwd)/my-untrusted.cert:/tmp/wetty
   --ssl-cert /tmp/wetty.cert --ssl-key /tmp/wetty.key
 ```
 
-To access the system Browser to URL:  `https://<pub-ip>/wetty`
+Or to run without TLS and NO self-signed certificate, use:
+
+```
+wget -O - https://get.docker.com | sh
+PASS="${1:-rx-m$(date +%Y%m%d)}"
+echo "ubuntu:${PASS}" | sudo chpasswd
+sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sudo sed -i 's/^PasswordAuthentication no/#PasswordAuthentication no/' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+sudo systemctl restart ssh
+docker run -d --net=host --restart always \
+  wettyoss/wetty -p 80 --force-ssh
+```
+
+To access the system Browser to URL: `https://<pub-ip>/wetty`
 
 > The cert is self signed, so users will need to accept the security warning.
 
-Login with credentials: `ubuntu/rx-myyyymmdd` (password defaults to rx-m and the year, month, 
+Login with credentials: `ubuntu/rx-myyyymmdd` (password defaults to rx-m and the year, month,
 day of system launch), setting the password to something less predictable in the script is advised.
 
 More info below:
-
 
 ### 1 - Typical repo update
 
@@ -82,30 +89,16 @@ After connecting to an AWS instance, we can bring repos up-to-date:
 sudo apt update
 ```
 
-
 ### 2 - Install docker
 
 Typical docker community edition install:
 
 ```
-sudo apt install ca-certificates curl gnupg
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt update
-
-sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
+wget -O - https://get.docker.com | sh
 sudo usermod -aG docker $USER
 ```
 
 Exit the session, then re-establish to update the user to the docker group - as always.
-
 
 ### 3 - Create a pssword and/or user for login
 
@@ -124,7 +117,6 @@ For a new user:
 sudo adduser student
 ```
 
-
 ### 5 - Modify sshd to accept password credential
 
 > N.B. This is the default and not needed:
@@ -135,8 +127,6 @@ Edit the file /etc/ssh/sshd_config to allow password logins:
 PasswordAuthentication yes
 ```
 
-> N.B. You can also just delete this file.
-
 And kill an override in an sshd daemon directory: /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
 (Comment out the line or change the no to yes)
 
@@ -144,12 +134,21 @@ And kill an override in an sshd daemon directory: /etc/ssh/sshd_config.d/60-clou
 #PasswordAuthentication no
 ```
 
+> N.B. You can also just delete this file (60-cloudimg-settings.conf)
+
+Or you can just use sed:
+
+```
+sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sudo sed -i 's/^PasswordAuthentication no/#PasswordAuthentication no/' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+
+```
+
 And restart sshd:
 
 ```
 sudo systemctl reload ssh
 ```
-
 
 ### 6 - Run the wetty container
 
@@ -159,7 +158,6 @@ The docker container for wetty has some tricky switches:
 docker run -d --net=host --restart always wettyoss/wetty -p 80 --force-ssh
 
 ```
-
 
 #### 6.1 - Running wetty over TLS (port 443)
 
@@ -191,12 +189,16 @@ docker run -d \
 
 ```
 
-
 ### 7 - Test
 
 Navigate to the AWS public IP of the EC2 instance: http(s)://10.20.30.40/wetty
 
-Supply credentials for the user whose password was just set.
+The public IP can be found from the AWS instance with:
 
+```
+curl http://checkip.amazonaws.com
+```
+
+Supply credentials for the user whose password was just set.
 
 _Copyright (c) 2025-2026 RX-M LLC, Cloud Native Consulting, all rights reserved_
